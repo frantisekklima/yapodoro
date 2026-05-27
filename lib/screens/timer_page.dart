@@ -43,6 +43,34 @@ class _TimerPageState extends State<TimerPage> {
     }
   }
 
+  // Material 3 Expressive helper to guarantee high contrast between focus and break colors
+  Color _getBreakColor(ThemeData theme) {
+    final primary = theme.colorScheme.primary;
+    final tertiary = theme.colorScheme.tertiary;
+    
+    final hslPrimary = HSLColor.fromColor(primary);
+    final hslTertiary = HSLColor.fromColor(tertiary);
+    
+    double hueDiff = (hslPrimary.hue - hslTertiary.hue).abs();
+    if (hueDiff > 180) {
+      hueDiff = 360 - hueDiff;
+    }
+    
+    // If hues are too close (less than 35 degrees difference), shift tertiary hue by 90 degrees
+    // to mathematically guarantee a highly distinct contrasting color!
+    if (hueDiff < 35.0) {
+      double newHue = (hslPrimary.hue + 90.0) % 360.0;
+      return HSLColor.fromAHSL(
+        tertiary.opacity,
+        newHue,
+        hslTertiary.saturation.clamp(0.65, 0.9), // Keep color vibrant
+        hslTertiary.lightness.clamp(0.45, 0.6),  // Ensure legibility
+      ).toColor();
+    }
+    
+    return tertiary;
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = TimerProvider.instance;
@@ -64,10 +92,8 @@ class _TimerPageState extends State<TimerPage> {
 
         final bool isIdle = currentTimerState == AppTimerState.idle;
 
-        // Expressive Material 3 Dynamic Colors (Mint vs Slate-Blue)
-        final Color focusPrimaryColor = isDark ? const Color(0xFF8FBC8F) : const Color(0xFF1E5631);
-        final Color breakPrimaryColor = isDark ? const Color(0xFF78A1BB) : const Color(0xFF2E5B70);
-        final Color modePrimaryColor = isBreak ? breakPrimaryColor : focusPrimaryColor;
+        // Expressive Material 3 Dynamic Colors derived entirely from system settings
+        final Color modePrimaryColor = isBreak ? _getBreakColor(theme) : theme.colorScheme.primary;
 
         final themeColors = [modePrimaryColor, modePrimaryColor.withOpacity(0.85)];
 
@@ -83,10 +109,10 @@ class _TimerPageState extends State<TimerPage> {
         
         if (isBreak) {
           sessionIndicator = "${_getOrdinal(provider.currentFlowSessionIndex)} Break";
-          dailyIndicator = "${_getOrdinal(todayFocusCount)} Break of Today";
+          dailyIndicator = "${_getOrdinal(todayFocusCount)} Break of the day";
         } else {
           sessionIndicator = "${_getOrdinal(provider.currentFlowSessionIndex + 1)} Focus";
-          dailyIndicator = "${_getOrdinal(todayFocusCount + 1)} Focus of Today";
+          dailyIndicator = "${_getOrdinal(todayFocusCount + 1)} Focus of the day";
         }
 
         // Split sessionIndicator to style the ordinal part in italic & larger size
@@ -132,22 +158,7 @@ class _TimerPageState extends State<TimerPage> {
           }
         }
 
-        // Up Next Label
-        String upNextLabel = "";
-        if (currentTimerMode == AppTimerMode.classic) {
-          if (isIdle) {
-            upNextLabel = "Up next\n${provider.classicShortBreakMinutes.toString().padLeft(2, '0')}:00\nShort Break";
-          } else if (isWork) {
-            upNextLabel = "Up next\n${provider.classicShortBreakMinutes.toString().padLeft(2, '0')}:00\nShort Break";
-          } else if (isBreak) {
-            upNextLabel = "Up next\n${provider.classicWorkMinutes.toString().padLeft(2, '0')}:00\nFocus";
-          }
-        } else {
-          // Dynamic mode next indicator - removed calculated:00, only show on break
-          if (isBreak) {
-            upNextLabel = "Up next\nFocus";
-          }
-        }
+
 
         return SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
@@ -156,7 +167,7 @@ class _TimerPageState extends State<TimerPage> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const SizedBox(height: 20),
+                const SizedBox(height: 10),
                 // Ordinal Session Indicator - fun typography
                 RichText(
                   text: TextSpan(
@@ -177,7 +188,7 @@ class _TimerPageState extends State<TimerPage> {
                       TextSpan(
                         text: phasePart,
                         style: TextStyle(
-                          color: isDark ? Colors.white70 : const Color(0xFF333333),
+                          color: theme.colorScheme.onBackground.withOpacity(0.8),
                           fontSize: 24.0,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.5,
@@ -191,19 +202,19 @@ class _TimerPageState extends State<TimerPage> {
                 Text(
                   dailyIndicator,
                   style: TextStyle(
-                    color: isDark ? Colors.white38 : const Color(0xFF777777),
+                    color: theme.colorScheme.onBackground.withOpacity(0.45),
                     fontSize: 14.0,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.5,
                   ),
                 ),
-                const SizedBox(height: 50),
-
+                const SizedBox(height: 24),
+ 
                 // Circular Timer Display
                 Center(
                   child: SizedBox(
-                    width: MediaQuery.of(context).size.width * 0.72,
-                    height: MediaQuery.of(context).size.width * 0.72,
+                    width: (MediaQuery.of(context).size.width * 0.72).clamp(200.0, 300.0),
+                    height: (MediaQuery.of(context).size.width * 0.72).clamp(200.0, 300.0),
                     child: CircularTimerProgress(
                       progress: progress,
                       gradientColors: themeColors,
@@ -212,7 +223,7 @@ class _TimerPageState extends State<TimerPage> {
                       child: Text(
                         timerString,
                         style: TextStyle(
-                          color: isDark ? Colors.white : const Color(0xFF111111),
+                          color: theme.colorScheme.onBackground,
                           fontSize: 54.0,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -1.5,
@@ -222,31 +233,41 @@ class _TimerPageState extends State<TimerPage> {
                   ),
                 ),
 
-                const SizedBox(height: 50),
+                if (provider.enableBreakRollover && provider.carryOverBreakSeconds > 0) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.add_circle_outline_rounded,
+                        size: 14.0,
+                        color: modePrimaryColor.withOpacity(0.85),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        "+${provider.carryOverBreakSeconds ~/ 60}:${(provider.carryOverBreakSeconds % 60).toString().padLeft(2, '0')} overflow will be added to next break",
+                        style: TextStyle(
+                          color: theme.colorScheme.onBackground.withOpacity(0.65),
+                          fontSize: 12.0,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
+                const SizedBox(height: 24),
 
                 // Mode Switcher (Classic vs Dynamic)
                 _buildModeSwitcher(provider, isIdle, theme, modePrimaryColor),
 
-                const SizedBox(height: 50),
+                const SizedBox(height: 24),
 
                 // Action Buttons Control Board
                 _buildControlBoard(provider, theme, isIdle, isWork, isBreak, modePrimaryColor),
 
-                const SizedBox(height: 40),
-                // Up Next Info text
-                if (upNextLabel.isNotEmpty)
-                  Text(
-                    upNextLabel,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: theme.colorScheme.onBackground.withOpacity(0.55),
-                      fontSize: 12.0,
-                      fontWeight: FontWeight.w700,
-                      height: 1.3,
-                    ),
-                  ),
-
-                const SizedBox(height: 100), // Space for bottom nav
+                const SizedBox(height: 40), // Balanced space for bottom nav
               ],
             ),
           ),
@@ -437,21 +458,19 @@ class _TimerPageState extends State<TimerPage> {
   }
 
   Widget _buildStartButton(TimerProvider provider, ThemeData theme, Color primaryColor) {
-    // Premium community ButtonM3E for the Start Flow button
-    return ButtonM3E(
+    // Compact, highly aesthetic symmetrical round play button (no text, zero navigation overlap)
+    return FilledButton(
       onPressed: () => provider.startTimer(),
-      label: const Text(
-        "START FLOW",
-        style: TextStyle(
-          fontWeight: FontWeight.w800,
-          fontSize: 14.0,
-          letterSpacing: 1.0,
-        ),
+      child: const Icon(Icons.play_arrow_rounded, size: 36.0),
+      style: FilledButton.styleFrom(
+        backgroundColor: primaryColor,
+        foregroundColor: Colors.white,
+        minimumSize: const Size(64, 64),
+        maximumSize: const Size(64, 64),
+        padding: EdgeInsets.zero,
+        shape: const CircleBorder(),
+        elevation: 0.0,
       ),
-      icon: const Icon(Icons.play_arrow_rounded),
-      style: ButtonM3EStyle.filled,
-      size: ButtonM3ESize.xl,
-      shape: ButtonM3EShape.round,
     );
   }
 }

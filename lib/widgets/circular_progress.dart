@@ -136,12 +136,13 @@ class _CircularTimerExpressivePainter extends CustomPainter {
     final end = start + activeSweep;
 
     // Proportional gap before & after active progress sweep (highly visible and balanced)
-    final gapDp = strokeWidth * 1.2;
+    final gapDp = strokeWidth * 2.4;
     final gapAngle = gapDp / baseRadius; 
 
-    // 1. Draw Broken Background Track (Only if not a complete 360 degree sweep)
+    // 1. Draw Broken Background Track (Only if not a complete 360 degree sweep and there is room for the track)
     final bool waveOnly = progress >= 1.0;
-    if (!waveOnly) {
+    final double remainingSpace = math.pi * 2 - activeSweep - (gapAngle * 2);
+    if (!waveOnly && remainingSpace > 0) {
       final trackPaint = Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = strokeWidth
@@ -149,16 +150,8 @@ class _CircularTimerExpressivePainter extends CustomPainter {
         ..isAntiAlias = true
         ..color = trackColor;
       
-      final total = math.pi * 2;
       final a1 = end + gapAngle;
-      final a2 = start - gapAngle;
-      
-      double sweep1 = (a2 - a1);
-      while (sweep1 <= 0) {
-        sweep1 += total;
-      }
-      
-      canvas.drawArc(rect, a1, sweep1, false, trackPaint);
+      canvas.drawArc(rect, a1, remainingSpace, false, trackPaint);
     }
 
     // 2. Draw Active Path

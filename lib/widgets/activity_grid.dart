@@ -41,13 +41,13 @@ class _ActivityGridState extends State<ActivityGrid> {
     super.dispose();
   }
 
-  Color _getCellColor(double minutes, bool isFuture) {
+  Color _getCellColor(double minutes, bool isFuture, Color primaryColor, bool isDark) {
     if (isFuture) return Colors.transparent;
-    if (minutes <= 0.0) return Colors.white.withOpacity(0.04);
-    if (minutes <= 15.0) return const Color(0xFF10B981).withOpacity(0.25);
-    if (minutes <= 30.0) return const Color(0xFF10B981).withOpacity(0.50);
-    if (minutes <= 60.0) return const Color(0xFF10B981).withOpacity(0.75);
-    return const Color(0xFF10B981); // Bright emerald for 60+ mins
+    if (minutes <= 0.0) return isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.04);
+    if (minutes <= 15.0) return primaryColor.withOpacity(0.25);
+    if (minutes <= 30.0) return primaryColor.withOpacity(0.50);
+    if (minutes <= 60.0) return primaryColor.withOpacity(0.75);
+    return primaryColor;
   }
 
   String _formatDateString(DateTime date) {
@@ -82,7 +82,10 @@ class _ActivityGridState extends State<ActivityGrid> {
     final monthLabels = _getMonthLabels();
     const double cellSize = 11.0;
     const double cellSpacing = 3.0;
-
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final primaryColor = theme.colorScheme.primary;
+ 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -90,12 +93,12 @@ class _ActivityGridState extends State<ActivityGrid> {
           padding: const EdgeInsets.only(left: 32.0, bottom: 8.0),
           child: Row(
             children: [
-              const Icon(Icons.grid_on, size: 14, color: Color(0xFF10B981)),
+              Icon(Icons.grid_on, size: 14, color: primaryColor),
               const SizedBox(width: 6),
               Text(
                 "Productivity Heatmap",
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.9),
+                  color: theme.colorScheme.onSurface.withOpacity(0.9),
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.5,
@@ -141,7 +144,7 @@ class _ActivityGridState extends State<ActivityGrid> {
                         child: Text(
                           label,
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.4),
+                            color: theme.colorScheme.onSurface.withOpacity(0.4),
                             fontSize: 8.0,
                             fontWeight: FontWeight.w500,
                           ),
@@ -164,8 +167,8 @@ class _ActivityGridState extends State<ActivityGrid> {
                             final isFuture = cellDate.isAfter(_today);
                             final dateKey = _formatDateString(cellDate);
                             final mins = widget.dailyMinutes[dateKey] ?? 0.0;
-                            final color = _getCellColor(mins, isFuture);
-
+                            final color = _getCellColor(mins, isFuture, primaryColor, isDark);
+ 
                             return GestureDetector(
                               onTap: isFuture
                                   ? null
@@ -176,15 +179,15 @@ class _ActivityGridState extends State<ActivityGrid> {
                                         SnackBar(
                                           content: Text(
                                             "$dateStr: ${mins.toStringAsFixed(1)} mins focused",
-                                            style: const TextStyle(color: Colors.white),
+                                            style: TextStyle(color: theme.colorScheme.onInverseSurface),
                                           ),
-                                          backgroundColor: const Color(0xFF0F172A),
+                                          backgroundColor: theme.colorScheme.inverseSurface,
                                           duration: const Duration(seconds: 2),
                                           behavior: SnackBarBehavior.floating,
                                           shape: RoundedRectangleBorder(
                                             borderRadius: BorderRadius.circular(10.0),
                                             side: BorderSide(
-                                              color: Colors.white.withOpacity(0.08),
+                                              color: theme.colorScheme.onInverseSurface.withOpacity(0.08),
                                             ),
                                           ),
                                         ),
@@ -216,37 +219,38 @@ class _ActivityGridState extends State<ActivityGrid> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              Text("Less", style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 9.0)),
+              Text("Less", style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.35), fontSize: 9.0)),
               const SizedBox(width: 4.0),
-              _buildLegendBox(Colors.white.withOpacity(0.04)),
-              _buildLegendBox(const Color(0xFF10B981).withOpacity(0.25)),
-              _buildLegendBox(const Color(0xFF10B981).withOpacity(0.50)),
-              _buildLegendBox(const Color(0xFF10B981).withOpacity(0.75)),
-              _buildLegendBox(const Color(0xFF10B981)),
+              _buildLegendBox(isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.04)),
+              _buildLegendBox(primaryColor.withOpacity(0.25)),
+              _buildLegendBox(primaryColor.withOpacity(0.50)),
+              _buildLegendBox(primaryColor.withOpacity(0.75)),
+              _buildLegendBox(primaryColor),
               const SizedBox(width: 4.0),
-              Text("More", style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 9.0)),
+              Text("More", style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.35), fontSize: 9.0)),
             ],
           ),
         ),
       ],
     );
   }
-
+ 
   Widget _buildWeekdayLabel(String text) {
+    final theme = Theme.of(context);
     return Container(
       height: 11.0,
       alignment: Alignment.center,
       child: Text(
         text,
         style: TextStyle(
-          color: Colors.white.withOpacity(0.35),
+          color: theme.colorScheme.onSurface.withOpacity(0.35),
           fontSize: 8.0,
           fontWeight: FontWeight.bold,
         ),
       ),
     );
   }
-
+ 
   Widget _buildLegendBox(Color color) {
     return Container(
       width: 9.0,

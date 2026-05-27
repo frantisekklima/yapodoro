@@ -16,6 +16,15 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   final PageController _pageController = PageController();
 
+  @override
+  void initState() {
+    super.initState();
+    // Check and request notifications, exact alarm, and battery exemption permissions
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      TimerProvider.instance.checkAndRequestPermissions(context);
+    });
+  }
+
   final List<Widget> _pages = const [
     TimerPage(),
     StatsPage(),
@@ -55,20 +64,13 @@ class _HomeScreenState extends State<HomeScreen> {
         final bool isBreak = currentTimerState == AppTimerState.breakTime ||
             (currentTimerState == AppTimerState.paused && provider.pausedState == AppTimerState.breakTime);
 
-        // Curated Material 3 Expressive backgrounds
-        // Focus state uses soft light mint-cream `#F4F9F6` or dark slate green `#0E1B15`
-        // Break state uses soft light slate `#EDF3F7` or dark slate blue `#0E1720`
-        final Color focusPrimaryColor = isDark ? const Color(0xFF8FBC8F) : const Color(0xFF1E5631);
-        final Color breakPrimaryColor = isDark ? const Color(0xFF78A1BB) : const Color(0xFF2E5B70);
-        final Color modePrimaryColor = isBreak ? breakPrimaryColor : focusPrimaryColor;
+        // Dynamic Material 3 Expressive colors derived from system settings
+        final Color modePrimaryColor = isBreak ? theme.colorScheme.tertiary : theme.colorScheme.primary;
 
-        final Color baseColor = isBreak
-            ? (isDark ? const Color(0xFF0F1A22) : const Color(0xFFEDF3F7))
-            : (isDark ? const Color(0xFF0C1610) : const Color(0xFFF4F9F6));
-
-        final Color gradientCenter = isBreak
-            ? (isDark ? const Color(0xFF162A38) : const Color(0xFFE3EDF4))
-            : (isDark ? const Color(0xFF132B1E) : const Color(0xFFEAF5EF));
+        final Color baseColor = Color.alphaBlend(
+          modePrimaryColor.withOpacity(isDark ? 0.08 : 0.05),
+          theme.colorScheme.surface,
+        );
 
         return Scaffold(
           backgroundColor: baseColor,
@@ -107,7 +109,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildExpressiveNavigationBar(ThemeData theme, bool isDark, Color activeColor, bool isBreak) {
     // Dynamic solid background matching theme and phase
     final Color navBg = isDark
-        ? (isBreak ? const Color(0xFF14222E) : const Color(0xFF122218))
+        ? Color.alphaBlend(activeColor.withOpacity(0.12), theme.colorScheme.surface)
         : Colors.white;
 
     final Color navBorder = isDark

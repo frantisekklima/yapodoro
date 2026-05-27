@@ -4,10 +4,14 @@ import 'package:dynamic_color/dynamic_color.dart';
 import 'package:tofu_expressive/tofu_expressive.dart';
 import 'package:m3e_design/m3e_design.dart';
 import 'screens/home_screen.dart';
+import 'services/notification_service.dart';
 
-void main() {
+void main() async {
   // Ensure Flutter binding is initialized
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize native systems-optimized notification manager
+  await NotificationService.instance.init();
   
   // Set system overlays for a beautiful immersive UI
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(

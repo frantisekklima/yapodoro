@@ -4,13 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../models/session.dart';
+import '../services/notification_service.dart';
 
 enum AppTimerMode { classic, dynamicMode }
 
 enum AppTimerState { idle, working, breakTime, paused }
 
-class TimerProvider extends ChangeNotifier {
+class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   // Singleton instance
   static final TimerProvider instance = TimerProvider();
 
@@ -18,8 +20,11 @@ class TimerProvider extends ChangeNotifier {
   AppTimerMode _mode = AppTimerMode.classic;
   AppTimerState _state = AppTimerState.idle;
   AppTimerState _pausedState = AppTimerState.idle; // Stores which state was paused
+  bool _isAppInForeground = true;                  // Tracks if app is active in the foreground
+  bool _enableBreakRollover = true;                // Option to roll over early break exit time to the next break
 
   AppTimerMode get mode => _mode;
+  bool get enableBreakRollover => _enableBreakRollover;
   AppTimerState get state => _state;
   AppTimerState get pausedState => _pausedState;
 
@@ -28,29 +33,36 @@ class TimerProvider extends ChangeNotifier {
   int _classicShortBreakMinutes = 5;
   int _classicLongBreakMinutes = 15;
   int _classicLongBreakInterval = 4; // Every 4th break is long
+  int _classicFocusCount = 0;        // Sessional counter of completed Classic Focus segments (independent of Dynamic mode)
 
   int get classicWorkMinutes => _classicWorkMinutes;
   int get classicShortBreakMinutes => _classicShortBreakMinutes;
   int get classicLongBreakMinutes => _classicLongBreakMinutes;
   int get classicLongBreakInterval => _classicLongBreakInterval;
+  int get classicFocusCount => _classicFocusCount;
 
   // Settings (Dynamic)
   double _dynamicDivisor = 4.0;
   int _carryOverBreakSeconds = 0;
+  int _dynamicFocusCount = 0; // Sessional counter of completed Dynamic Focus segments (independent of Classic mode)
 
   double get dynamicDivisor => _dynamicDivisor;
   int get carryOverBreakSeconds => _carryOverBreakSeconds;
+  int get dynamicFocusCount => _dynamicFocusCount;
 
   // Active Timer Counters
   int _elapsedSeconds = 0; // Counts up in dynamic work
   int _remainingSeconds = 0; // Counts down in classic work, and both breaks
   int _totalDurationForCurrentSegment = 0; // To compute percentage/progress
-  int _currentFlowSessionIndex = 0; // Tracks the focus/break count of the current continuous flow
 
   int get elapsedSeconds => _elapsedSeconds;
   int get remainingSeconds => _remainingSeconds;
   int get totalDurationForCurrentSegment => _totalDurationForCurrentSegment;
-  int get currentFlowSessionIndex => _currentFlowSessionIndex;
+
+  // Dynamic getter returning active mode sessional count
+  int get currentFlowSessionIndex {
+    return _mode == AppTimerMode.classic ? _classicFocusCount : _dynamicFocusCount;
+  }
 
   // Stats
   List<WorkSession> _sessions = [];
@@ -94,6 +106,7 @@ class TimerProvider extends ChangeNotifier {
   // Constructor
   TimerProvider() {
     _init();
+    WidgetsBinding.instance.addObserver(this);
   }
 
   // Load configuration and data from SharedPreferences
@@ -107,6 +120,9 @@ class TimerProvider extends ChangeNotifier {
     _classicLongBreakInterval = prefs.getInt('classicLongBreakInterval') ?? 4;
     _dynamicDivisor = prefs.getDouble('dynamicDivisor') ?? 4.0;
     _carryOverBreakSeconds = prefs.getInt('carryOverBreakSeconds') ?? 0;
+    _enableBreakRollover = prefs.getBool('enableBreakRollover') ?? true;
+    _classicFocusCount = prefs.getInt('classicFocusCount') ?? 0;
+    _dynamicFocusCount = prefs.getInt('dynamicFocusCount') ?? 0;
     
     // Load Mode
     final savedMode = prefs.getString('appTimerMode');
@@ -124,6 +140,63 @@ class TimerProvider extends ChangeNotifier {
         debugPrint("Error decoding sessions: $e");
       }
     }
+
+    // Restore Saved Timer State
+    final savedStateName = prefs.getString('timer_state');
+    if (savedStateName != null) {
+      final savedState = AppTimerState.values.firstWhere((e) => e.name == savedStateName, orElse: () => AppTimerState.idle);
+      final savedModeName = prefs.getString('timer_mode');
+      final savedMode = AppTimerMode.values.firstWhere((e) => e.name == savedModeName, orElse: () => AppTimerMode.classic);
+      
+      _state = savedState;
+      _mode = savedMode;
+      
+      final pausedStateName = prefs.getString('timer_paused_state');
+      _pausedState = pausedStateName != null 
+          ? AppTimerState.values.firstWhere((e) => e.name == pausedStateName, orElse: () => AppTimerState.idle)
+          : AppTimerState.idle;
+      
+      final targetTimeStr = prefs.getString('segment_target_time') ?? '';
+      _segmentTargetTime = targetTimeStr.isNotEmpty ? DateTime.tryParse(targetTimeStr) : null;
+      
+      final startTimeStr = prefs.getString('work_start_time') ?? '';
+      _workStartTime = startTimeStr.isNotEmpty ? DateTime.tryParse(startTimeStr) : null;
+      
+      _remainingSeconds = prefs.getInt('remaining_seconds') ?? 0;
+      _elapsedSeconds = prefs.getInt('elapsed_seconds') ?? 0;
+      _secondsBeforePause = prefs.getInt('paused_seconds') ?? 0;
+
+      // Handle recovery of active timers
+      if (_state == AppTimerState.working || _state == AppTimerState.breakTime) {
+        if (_mode == AppTimerMode.classic || _state == AppTimerState.breakTime) {
+          if (_segmentTargetTime != null) {
+            final diff = _segmentTargetTime!.difference(DateTime.now()).inSeconds;
+            if (diff <= 0) {
+              // Timer already completed while app was closed
+              _remainingSeconds = 0;
+              if (_state == AppTimerState.working) {
+                _handleClassicWorkCompleted();
+              } else {
+                _handleBreakCompleted();
+              }
+            } else {
+              // Timer still running, resume ticking
+              _remainingSeconds = diff;
+              _startTicker();
+              _updateSystemNotifications();
+            }
+          }
+        } else {
+          // Dynamic mode working: recalculate count-up
+          if (_workStartTime != null) {
+            _elapsedSeconds = DateTime.now().difference(_workStartTime!).inSeconds;
+            _startTicker();
+            _updateSystemNotifications();
+          }
+        }
+      }
+    }
+
     notifyListeners();
   }
 
@@ -195,6 +268,9 @@ class TimerProvider extends ChangeNotifier {
     }
     
     _startTicker();
+    NotificationService.instance.cancelCompletionReminder();
+    _updateSystemNotifications();
+    _saveTimerState();
     notifyListeners();
   }
 
@@ -212,6 +288,8 @@ class TimerProvider extends ChangeNotifier {
     } else {
       _secondsBeforePause = _remainingSeconds;
     }
+    _updateSystemNotifications();
+    _saveTimerState();
     notifyListeners();
   }
 
@@ -230,6 +308,9 @@ class TimerProvider extends ChangeNotifier {
     }
     
     _startTicker();
+    NotificationService.instance.cancelCompletionReminder();
+    _updateSystemNotifications();
+    _saveTimerState();
     notifyListeners();
   }
 
@@ -243,8 +324,16 @@ class TimerProvider extends ChangeNotifier {
       _logSession(_secondsBeforePause);
     }
     
-    _currentFlowSessionIndex = 0;
+    if (_mode == AppTimerMode.classic) {
+      _classicFocusCount = 0;
+      _saveClassicFocusCount();
+    } else {
+      _dynamicFocusCount = 0;
+      _saveDynamicFocusCount();
+    }
+
     _resetTimerEngine();
+    NotificationService.instance.cancelCompletionReminder();
     HapticFeedback.heavyImpact();
     notifyListeners();
   }
@@ -268,7 +357,8 @@ class TimerProvider extends ChangeNotifier {
     _saveCarryOver();
 
     // Transition to break
-    _currentFlowSessionIndex++;
+    _dynamicFocusCount++;
+    _saveDynamicFocusCount();
     _state = AppTimerState.breakTime;
     _totalDurationForCurrentSegment = totalBreak;
     _remainingSeconds = totalBreak;
@@ -276,6 +366,15 @@ class TimerProvider extends ChangeNotifier {
 
     _startTicker();
     _playAlertSound();
+    _updateSystemNotifications();
+    _saveTimerState();
+    // Show static Focus Completed notification only if in background
+    if (!_isAppInForeground) {
+      NotificationService.instance.showSessionCompleteNotification(
+        title: "Focus Completed!",
+        body: "Your break has started. Tap to view the timer.",
+      );
+    }
     notifyListeners();
   }
 
@@ -288,14 +387,14 @@ class TimerProvider extends ChangeNotifier {
         ? (_totalDurationForCurrentSegment - _remainingSeconds)
         : (_totalDurationForCurrentSegment - _secondsBeforePause);
 
-    // Log the focus session if it lasted more than 5s
-    if (workedSeconds >= 5) {
-      _logSession(workedSeconds);
-    }
+    // Log the focus session regardless of speed (so that fast skips count towards Focus of the day)
+    _logSession(workedSeconds);
 
     // Transition to break
     _stopTicker();
-    int totalWorkSessions = _sessions.length;
+    _classicFocusCount++;
+    _saveClassicFocusCount();
+    int totalWorkSessions = _classicFocusCount;
     bool isLongBreak = totalWorkSessions > 0 && (totalWorkSessions % _classicLongBreakInterval == 0);
     int baseBreakMinutes = isLongBreak ? _classicLongBreakMinutes : _classicShortBreakMinutes;
 
@@ -303,7 +402,6 @@ class TimerProvider extends ChangeNotifier {
     _carryOverBreakSeconds = 0;
     _saveCarryOver();
 
-    _currentFlowSessionIndex++;
     _state = AppTimerState.breakTime;
     _totalDurationForCurrentSegment = totalBreakSeconds;
     _remainingSeconds = totalBreakSeconds;
@@ -311,6 +409,8 @@ class TimerProvider extends ChangeNotifier {
 
     _startTicker();
     _playAlertSound();
+    _updateSystemNotifications();
+    _saveTimerState();
     notifyListeners();
   }
 
@@ -320,9 +420,14 @@ class TimerProvider extends ChangeNotifier {
 
     int breakRemaining = _state == AppTimerState.breakTime ? _remainingSeconds : _secondsBeforePause;
     
-    // Save carry over
-    _carryOverBreakSeconds += breakRemaining;
-    _saveCarryOver();
+    // Save carry over if break rollover is enabled
+    if (_enableBreakRollover) {
+      _carryOverBreakSeconds += breakRemaining;
+      _saveCarryOver();
+    } else {
+      _carryOverBreakSeconds = 0;
+      _saveCarryOver();
+    }
 
     // Stop current break and transition back to working state
     _stopTicker();
@@ -339,6 +444,8 @@ class TimerProvider extends ChangeNotifier {
     }
 
     _startTicker();
+    _updateSystemNotifications();
+    _saveTimerState();
     notifyListeners();
   }
 
@@ -364,6 +471,8 @@ class TimerProvider extends ChangeNotifier {
     _totalDurationForCurrentSegment = 0;
     _segmentTargetTime = null;
     _workStartTime = null;
+    _updateSystemNotifications();
+    _clearSavedTimerState();
   }
 
   void _tick() {
@@ -412,8 +521,10 @@ class TimerProvider extends ChangeNotifier {
     _stopTicker();
     _logSession(_classicWorkMinutes * 60);
 
-    // Calculate which break it is
-    int totalWorkSessions = _sessions.length;
+    // Calculate which break it is (based entirely on Classic Focus count)
+    _classicFocusCount++;
+    _saveClassicFocusCount();
+    int totalWorkSessions = _classicFocusCount;
     bool isLongBreak = totalWorkSessions > 0 && (totalWorkSessions % _classicLongBreakInterval == 0);
     int baseBreakMinutes = isLongBreak ? _classicLongBreakMinutes : _classicShortBreakMinutes;
 
@@ -422,7 +533,6 @@ class TimerProvider extends ChangeNotifier {
     _saveCarryOver();
 
     // Transition to break
-    _currentFlowSessionIndex++;
     _state = AppTimerState.breakTime;
     _totalDurationForCurrentSegment = totalBreakSeconds;
     _remainingSeconds = totalBreakSeconds;
@@ -430,6 +540,15 @@ class TimerProvider extends ChangeNotifier {
 
     _startTicker();
     _playAlertSound();
+    _updateSystemNotifications();
+    _saveTimerState();
+    // Show static Focus Completed notification only if in background
+    if (!_isAppInForeground) {
+      NotificationService.instance.showSessionCompleteNotification(
+        title: "Focus Completed!",
+        body: "Your break has started automatically. Tap to view the timer.",
+      );
+    }
     notifyListeners();
   }
 
@@ -437,12 +556,19 @@ class TimerProvider extends ChangeNotifier {
   void _handleBreakCompleted() {
     _resetTimerEngine();
     _playAlertSound();
+    // Show static Break Completed notification only if in background
+    if (!_isAppInForeground) {
+      NotificationService.instance.showSessionCompleteNotification(
+        title: "Break Completed!",
+        body: "Tap to return to the app and start your next focus session.",
+      );
+    }
     notifyListeners();
   }
 
   // Save Session data
   Future<void> _logSession(int durationInSeconds) async {
-    if (durationInSeconds < 5) return; // Ignore micro-sessions less than 5 seconds
+    // Log every session regardless of duration so that fast skips count towards Focus of the day!
 
     final newSession = WorkSession(
       date: DateTime.now(),
@@ -461,9 +587,12 @@ class TimerProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('work_sessions');
     await prefs.remove('carryOverBreakSeconds');
+    await prefs.remove('classicFocusCount');
+    await prefs.remove('dynamicFocusCount');
+    _classicFocusCount = 0;
+    _dynamicFocusCount = 0;
     _sessions.clear();
     _carryOverBreakSeconds = 0;
-    _currentFlowSessionIndex = 0;
     _resetTimerEngine();
     HapticFeedback.heavyImpact();
     notifyListeners();
@@ -482,9 +611,196 @@ class TimerProvider extends ChangeNotifier {
   // Disposal
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _ticker?.cancel();
     _audioPlayer.dispose();
     super.dispose();
+  }
+
+  // App Foreground / Background Lifecycle sync
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _isAppInForeground = state == AppLifecycleState.resumed;
+    if (state == AppLifecycleState.resumed) {
+      _handleForegroundResume();
+    }
+  }
+
+  Future<void> _handleForegroundResume() async {
+    // Check if SCHEDULE_EXACT_ALARM permission was revoked mid-session
+    if (_state == AppTimerState.working || _state == AppTimerState.breakTime) {
+      final exactAlarmGranted = await Permission.scheduleExactAlarm.isGranted;
+      if (!exactAlarmGranted) {
+        // Revoked: pause timer and show warning
+        pauseTimer();
+        notifyListeners();
+      }
+    }
+    // Force immediate time recalculation tick
+    _tick();
+  }
+
+  // State Serialization & Persistent Storage
+  Future<void> _saveTimerState() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('timer_state', _state.name);
+    await prefs.setString('timer_mode', _mode.name);
+    await prefs.setString('timer_paused_state', _pausedState.name);
+    await prefs.setString('segment_target_time', _segmentTargetTime?.toIso8601String() ?? '');
+    await prefs.setString('work_start_time', _workStartTime?.toIso8601String() ?? '');
+    await prefs.setInt('remaining_seconds', _remainingSeconds);
+    await prefs.setInt('elapsed_seconds', _elapsedSeconds);
+    await prefs.setInt('paused_seconds', _secondsBeforePause);
+  }
+
+  Future<void> _clearSavedTimerState() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('timer_state');
+    await prefs.remove('timer_mode');
+    await prefs.remove('timer_paused_state');
+    await prefs.remove('segment_target_time');
+    await prefs.remove('work_start_time');
+    await prefs.remove('remaining_seconds');
+    await prefs.remove('elapsed_seconds');
+    await prefs.remove('paused_seconds');
+  }
+
+  // Native Notifications presentation interface
+  void _updateSystemNotifications() {
+    if (_state == AppTimerState.idle) {
+      NotificationService.instance.cancelTimerNotifications();
+      return;
+    }
+
+    final isBreak = _state == AppTimerState.breakTime;
+    final isClassic = _mode == AppTimerMode.classic;
+    final String phaseTitle = isBreak ? "Break Active" : "Focus Session Active";
+
+    if (_state == AppTimerState.working || _state == AppTimerState.breakTime) {
+      if (isClassic || isBreak) {
+        if (_segmentTargetTime != null) {
+          // Format target end time to hh:mm for premium high-utility readability
+          final endTimeStr = "${_segmentTargetTime!.hour.toString().padLeft(2, '0')}:${_segmentTargetTime!.minute.toString().padLeft(2, '0')}";
+          final bodyText = isBreak 
+              ? "Ends at $endTimeStr • Take a relaxing break!" 
+              : "Ends at $endTimeStr • Keep up the great work!";
+
+          // Show active countdown chronometer in drawer
+          NotificationService.instance.updateTimerNotification(
+            title: phaseTitle,
+            body: bodyText,
+            endTime: _segmentTargetTime!,
+            isCountdown: true,
+          );
+
+          // Schedule high-priority alarm notification when timer completes
+          NotificationService.instance.scheduleCompletionAlarm(
+            title: isBreak ? "Break Completed!" : "Focus Segment Completed!",
+            body: isBreak ? "Ready to start focusing again?" : "Time to take a well-deserved break!",
+            endTime: _segmentTargetTime!,
+          );
+        }
+      } else {
+        // Dynamic mode work counts up
+        if (_workStartTime != null) {
+          NotificationService.instance.updateTimerNotification(
+            title: "Dynamic Focus Active",
+            body: "Focusing without a strict deadline...",
+            endTime: _workStartTime!,
+            isCountdown: false,
+          );
+        }
+      }
+    } else if (_state == AppTimerState.paused) {
+      // Paused state: show static pause notification with exact remaining time
+      final bool pausedBreak = _pausedState == AppTimerState.breakTime;
+      final String pausedTitle = pausedBreak ? "Break Paused" : "Focus Paused";
+      
+      String remainingText = "";
+      if (pausedBreak || _mode == AppTimerMode.classic) {
+        remainingText = "Time remaining: ${_secondsBeforePause ~/ 60}:${(_secondsBeforePause % 60).toString().padLeft(2, '0')}";
+      } else {
+        remainingText = "Time focused: ${_secondsBeforePause ~/ 60}:${(_secondsBeforePause % 60).toString().padLeft(2, '0')}";
+      }
+
+      // First cancel the active scheduled alarm while retaining status bar notification
+      NotificationService.instance.cancelAlarmNotification();
+      
+      NotificationService.instance.showPausedNotification(
+        title: pausedTitle,
+        timeRemainingText: remainingText,
+      );
+    }
+  }
+
+  // Permission Request Interface
+  Future<void> checkAndRequestPermissions(BuildContext context) async {
+    // 1. Notification Permission (Android 13+)
+    final notificationStatus = await Permission.notification.status;
+    if (!notificationStatus.isGranted) {
+      await Permission.notification.request();
+    }
+
+    // 2. Exact Alarm Permission (Android 13+ SCHEDULE_EXACT_ALARM)
+    final exactAlarmStatus = await Permission.scheduleExactAlarm.status;
+    if (!exactAlarmStatus.isGranted) {
+      if (context.mounted) {
+        final bool? accept = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("Alarms & Reminders Permission"),
+            content: const Text(
+              "Yet Another Pomodoro needs the Alarms & Reminders permission to play completion sounds precisely on time in the background.\n\n"
+              "Please allow this permission on the next settings screen."
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text("CANCEL"),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text("PROCEED"),
+              ),
+            ],
+          ),
+        );
+
+        if (accept == true) {
+          await Permission.scheduleExactAlarm.request();
+        }
+      }
+    }
+
+    // 3. Battery Optimizations exemption for OEM survival
+    final batteryOptStatus = await Permission.ignoreBatteryOptimizations.status;
+    if (!batteryOptStatus.isGranted) {
+      if (context.mounted) {
+        final bool? acceptBattery = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("Battery Optimization Exemption"),
+            content: const Text(
+              "To prevent aggressive background task killers from stopping your timer, please exempt Yet Another Pomodoro from battery optimization on the next settings screen."
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text("CANCEL"),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text("PROCEED"),
+              ),
+            ],
+          ),
+        );
+
+        if (acceptBattery == true) {
+          await Permission.ignoreBatteryOptimizations.request();
+        }
+      }
+    }
   }
 
   // STATS HELPERS
@@ -540,5 +856,29 @@ class TimerProvider extends ChangeNotifier {
       map[key] = (map[key] ?? 0) + minutes;
     }
     return map;
+  }
+
+  // Save Classic Focus Count
+  Future<void> _saveClassicFocusCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('classicFocusCount', _classicFocusCount);
+  }
+
+  // Save Dynamic Focus Count
+  Future<void> _saveDynamicFocusCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('dynamicFocusCount', _dynamicFocusCount);
+  }
+
+  // Setter to dynamically enable or disable the Break Rollover feature
+  Future<void> setEnableBreakRollover(bool value) async {
+    _enableBreakRollover = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('enableBreakRollover', value);
+    if (!value) {
+      _carryOverBreakSeconds = 0;
+      _saveCarryOver();
+    }
+    notifyListeners();
   }
 }

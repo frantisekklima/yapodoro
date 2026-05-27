@@ -26,8 +26,8 @@ class StatsPage extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final Color focusColor = isDark ? const Color(0xFF8FBC8F) : const Color(0xFF1E5631);
-    final Color breakColor = isDark ? const Color(0xFF78A1BB) : const Color(0xFF2E5B70);
+    final Color focusColor = theme.colorScheme.primary;
+    final Color breakColor = theme.colorScheme.tertiary;
 
     return AnimatedBuilder(
       animation: provider,
@@ -77,7 +77,7 @@ class StatsPage extends StatelessWidget {
                           child: _buildSplitBlockCard(
                             title: "Focus",
                             value: todayFocus,
-                            bgColor: isDark ? const Color(0xFF162D1F) : const Color(0xFFEBF4EE),
+                            bgColor: theme.colorScheme.primaryContainer.withOpacity(isDark ? 0.22 : 0.75),
                             textColor: focusColor,
                             theme: theme,
                           ),
@@ -87,7 +87,7 @@ class StatsPage extends StatelessWidget {
                           child: _buildSplitBlockCard(
                             title: "Break",
                             value: todayBreak,
-                            bgColor: isDark ? const Color(0xFF13232E) : const Color(0xFFEAF1F5),
+                            bgColor: theme.colorScheme.tertiaryContainer.withOpacity(isDark ? 0.22 : 0.75),
                             textColor: breakColor,
                             theme: theme,
                           ),

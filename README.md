@@ -1,17 +1,28 @@
-# yet_another_pomodoro
+# YAP — Yet Another Pomodoro
 
-A new Flutter project.
+YAP is a modern Pomodoro application featuring two modes:
+  1. **Classic Mode**: Standard intervals (Focus, Short Break, and a Long Break after every 4th Focus segment) with customized durations.
+  2. **Dynamic Mode**: A count-up focus timer that measures your *flow state*, automatically calculating break durations using a customizable division factor (e.g., Focus Time / 4).
 
-## Getting Started
+---
 
-This project is a starting point for a Flutter application.
+## Installing the App
 
-A few resources to get you started if this is your first Flutter project:
+**Download the latest installable apk from [Releases](https://github.com/frantisekklima/yet-another-pomodoro/releases) **
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Questions No One Asked
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+**Will this ever be on Google Play?**
+*Hopefully*
+
+**Will there ever be an iOS version?**
+*Maybe*
+
+**Any AI involved in this project?**
+*Entire lakes were dried for this*
+
+---
+
+## Honorable Mentions
+
+[Jakub](https://github.com/jakubkuceradev) gave me the idea for this project when he was making his own version and implementing wrong opinions. Your insight is still appreciated though xoxo.

@@ -10,8 +10,8 @@ class SettingsPage extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    // Harmonized green accent color matching dynamic themes
-    final Color primaryColor = isDark ? const Color(0xFF8FBC8F) : const Color(0xFF1E5631);
+    // Accent color derived dynamically from system settings color scheme
+    final Color primaryColor = theme.colorScheme.primary;
 
     return AnimatedBuilder(
       animation: provider,
@@ -83,7 +83,11 @@ class SettingsPage extends StatelessWidget {
               _buildSectionHeader("Dynamic Divisor", theme, primaryColor),
               _buildExpressiveDynamicDivisorCard(context, provider, theme, isTimerActive, primaryColor, isDark),
 
-              // 4. Danger Zone Card
+              // 4. Break Settings Config Card (Switch toggle)
+              _buildSectionHeader("Break Settings", theme, primaryColor),
+              _buildBreakSettingsCard(context, provider, theme, isTimerActive, primaryColor, isDark),
+
+              // 5. Danger Zone Card
               _buildSectionHeader("Danger Zone", theme, primaryColor),
               _buildSettingsCard(
                 theme: theme,
@@ -185,24 +189,17 @@ class SettingsPage extends StatelessWidget {
           color: primaryColor.withOpacity(0.08),
         ),
       ),
-      child: Column(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          // Headings
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+          // Column 1: Focus
+          Column(
             children: [
               _buildDurationSubLabel("Focus", theme),
-              _buildDurationSubLabel("Short break", theme),
-              _buildDurationSubLabel("Long break", theme),
-            ],
-          ),
-          const SizedBox(height: 12.0),
-          // Large side-by-side rounded numbers
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
+              const SizedBox(height: 12.0),
               _buildDurationNumberBox(
                 context: context,
+                label: "Focus",
                 value: provider.classicWorkMinutes,
                 min: 1,
                 max: 120,
@@ -212,8 +209,16 @@ class SettingsPage extends StatelessWidget {
                 primaryColor: primaryColor,
                 isDark: isDark,
               ),
+            ],
+          ),
+          // Column 2: Short break
+          Column(
+            children: [
+              _buildDurationSubLabel("Short break", theme),
+              const SizedBox(height: 12.0),
               _buildDurationNumberBox(
                 context: context,
+                label: "Short Break",
                 value: provider.classicShortBreakMinutes,
                 min: 1,
                 max: 45,
@@ -223,8 +228,16 @@ class SettingsPage extends StatelessWidget {
                 primaryColor: primaryColor,
                 isDark: isDark,
               ),
+            ],
+          ),
+          // Column 3: Long break
+          Column(
+            children: [
+              _buildDurationSubLabel("Long break", theme),
+              const SizedBox(height: 12.0),
               _buildDurationNumberBox(
                 context: context,
+                label: "Long Break",
                 value: provider.classicLongBreakMinutes,
                 min: 1,
                 max: 60,
@@ -245,7 +258,7 @@ class SettingsPage extends StatelessWidget {
     return Text(
       label,
       style: TextStyle(
-        color: theme.colorScheme.onBackground.withOpacity(0.5),
+        color: theme.colorScheme.onBackground.withOpacity(0.55),
         fontSize: 12.0,
         fontWeight: FontWeight.bold,
       ),
@@ -254,6 +267,7 @@ class SettingsPage extends StatelessWidget {
 
   Widget _buildDurationNumberBox({
     required BuildContext context,
+    required String label,
     required int value,
     required int min,
     required int max,
@@ -277,24 +291,38 @@ class SettingsPage extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 2.0),
-        // Huge expressive capsule box
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-          decoration: BoxDecoration(
-            color: isDark ? Colors.white.withOpacity(0.04) : Colors.white,
-            borderRadius: BorderRadius.circular(16.0),
-            border: Border.all(
-              color: primaryColor.withOpacity(0.12),
-              width: 1.5,
+        // Huge expressive capsule box - Clickable to open text keyboard input dialog
+        GestureDetector(
+          onTap: isDisabled ? null : () {
+            _showNumberInputDialog(
+              context: context,
+              title: "Edit $label Time",
+              currentValue: value.toDouble(),
+              min: min.toDouble(),
+              max: max.toDouble(),
+              isDecimal: false,
+              onSubmit: (val) => onChanged(val.round()),
+              theme: theme,
+            );
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withOpacity(0.04) : Colors.white,
+              borderRadius: BorderRadius.circular(16.0),
+              border: Border.all(
+                color: primaryColor.withOpacity(0.12),
+                width: 1.5,
+              ),
             ),
-          ),
-          child: Text(
-            displayStr,
-            style: TextStyle(
-              color: theme.colorScheme.onBackground,
-              fontSize: 32.0,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -1.0,
+            child: Text(
+              displayStr,
+              style: TextStyle(
+                color: theme.colorScheme.onBackground,
+                fontSize: 32.0,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -1.0,
+              ),
             ),
           ),
         ),
@@ -345,18 +373,32 @@ class SettingsPage extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: primaryColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  provider.classicLongBreakInterval.toString(),
-                  style: TextStyle(
-                    color: primaryColor,
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
+              GestureDetector(
+                onTap: isDisabled ? null : () {
+                  _showNumberInputDialog(
+                    context: context,
+                    title: "Edit Session Length",
+                    currentValue: provider.classicLongBreakInterval.toDouble(),
+                    min: 1.0,
+                    max: 12.0,
+                    isDecimal: false,
+                    onSubmit: (val) => provider.saveSettings(longBreakInterval: val.round()),
+                    theme: theme,
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: primaryColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    provider.classicLongBreakInterval.toString(),
+                    style: TextStyle(
+                      color: primaryColor,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
@@ -420,18 +462,32 @@ class SettingsPage extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: primaryColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  provider.dynamicDivisor.toStringAsFixed(1),
-                  style: TextStyle(
-                    color: primaryColor,
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
+              GestureDetector(
+                onTap: isDisabled ? null : () {
+                  _showNumberInputDialog(
+                    context: context,
+                    title: "Edit Break Divisor",
+                    currentValue: provider.dynamicDivisor,
+                    min: 1.5,
+                    max: 8.0,
+                    isDecimal: true,
+                    onSubmit: (val) => provider.saveSettings(divisor: val),
+                    theme: theme,
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: primaryColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    provider.dynamicDivisor.toStringAsFixed(1),
+                    style: TextStyle(
+                      color: primaryColor,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
@@ -544,6 +600,164 @@ class SettingsPage extends StatelessWidget {
               },
               child: const Text(
                 "RESET DATA",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Break Settings Card containing early exit rollover toggle switch
+  Widget _buildBreakSettingsCard(
+    BuildContext context,
+    TimerProvider provider,
+    ThemeData theme,
+    bool isDisabled,
+    Color primaryColor,
+    bool isDark,
+  ) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 12.0),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.02) : primaryColor.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(24.0),
+        border: Border.all(
+          color: primaryColor.withOpacity(0.08),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Carry-over early break exit",
+                  style: TextStyle(
+                    color: theme.colorScheme.onBackground,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  "Adds remaining break seconds to your next break if you return to work early.",
+                  style: TextStyle(
+                    color: theme.colorScheme.onBackground.withOpacity(0.4),
+                    fontSize: 11,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Switch(
+            value: provider.enableBreakRollover,
+            activeColor: primaryColor,
+            onChanged: isDisabled
+                ? null
+                : (val) => provider.setEnableBreakRollover(val),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Material 3 premium keyboard number input dialog helper
+  void _showNumberInputDialog({
+    required BuildContext context,
+    required String title,
+    required double currentValue,
+    required double min,
+    required double max,
+    required bool isDecimal,
+    required ValueChanged<double> onSubmit,
+    required ThemeData theme,
+  }) {
+    final controller = TextEditingController(
+      text: isDecimal ? currentValue.toStringAsFixed(1) : currentValue.round().toString(),
+    );
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: theme.colorScheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24.0),
+            side: BorderSide(
+              color: theme.colorScheme.outline.withOpacity(0.12),
+              width: 1.0,
+            ),
+          ),
+          title: Text(
+            title,
+            style: TextStyle(color: theme.colorScheme.onBackground, fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Enter a value between ${isDecimal ? min.toStringAsFixed(1) : min.round()} and ${isDecimal ? max.toStringAsFixed(1) : max.round()}:",
+                style: TextStyle(color: theme.colorScheme.onBackground.withOpacity(0.6), fontSize: 12.0),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                keyboardType: TextInputType.numberWithOptions(decimal: isDecimal),
+                autofocus: true,
+                style: TextStyle(color: theme.colorScheme.onBackground, fontWeight: FontWeight.bold),
+                decoration: InputDecoration(
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: theme.colorScheme.outline.withOpacity(0.3)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                "CANCEL",
+                style: TextStyle(color: theme.colorScheme.onBackground.withOpacity(0.5), fontWeight: FontWeight.bold),
+              ),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: theme.colorScheme.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+              ),
+              onPressed: () {
+                final double? parsedVal = double.tryParse(controller.text);
+                if (parsedVal != null && parsedVal >= min && parsedVal <= max) {
+                  onSubmit(parsedVal);
+                  Navigator.of(context).pop();
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Please enter a valid number between ${isDecimal ? min.toStringAsFixed(1) : min.round()} and ${isDecimal ? max.toStringAsFixed(1) : max.round()}"),
+                      backgroundColor: theme.colorScheme.error,
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+              child: const Text(
+                "SAVE",
                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
             ),
