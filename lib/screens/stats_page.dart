@@ -33,7 +33,7 @@ class StatsPage extends StatelessWidget {
       animation: provider,
       builder: (context, _) {
         final todayFocus = _formatTotalTime(provider.todayWorkSeconds);
-        final todayBreak = _formatTotalTime(provider.carryOverBreakSeconds);
+        final todayBreak = _formatTotalTime(provider.todayBreakSeconds);
 
         return SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
@@ -145,7 +145,7 @@ class StatsPage extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 18.0),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(20.0),
+        borderRadius: BorderRadius.circular(28.0),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -196,11 +196,8 @@ class StatsPage extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18.0),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(isDark ? 0.35 : 0.45),
-        borderRadius: BorderRadius.circular(24.0),
-        border: Border.all(
-          color: theme.colorScheme.outline.withOpacity(0.12),
-        ),
+        color: theme.colorScheme.surfaceVariant.withOpacity(isDark ? 0.35 : 0.5),
+        borderRadius: BorderRadius.circular(28.0),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -315,11 +312,8 @@ class StatsPage extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18.0),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(isDark ? 0.35 : 0.45),
-        borderRadius: BorderRadius.circular(24.0),
-        border: Border.all(
-          color: theme.colorScheme.outline.withOpacity(0.12),
-        ),
+        color: theme.colorScheme.surfaceVariant.withOpacity(isDark ? 0.35 : 0.5),
+        borderRadius: BorderRadius.circular(28.0),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -401,12 +395,8 @@ class StatsPage extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
       padding: const EdgeInsets.symmetric(vertical: 16.0),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(isDark ? 0.35 : 0.45),
-        borderRadius: BorderRadius.circular(24.0),
-        border: Border.all(
-          color: theme.colorScheme.outline.withOpacity(0.12),
-          width: 1.0,
-        ),
+        color: theme.colorScheme.surfaceVariant.withOpacity(isDark ? 0.35 : 0.5),
+        borderRadius: BorderRadius.circular(28.0),
       ),
       child: child,
     );
@@ -415,17 +405,14 @@ class StatsPage extends StatelessWidget {
   Widget _buildRecentSessionsLog(TimerProvider provider, ThemeData theme, Color focusColor) {
     final recent = provider.sessions.reversed.take(5).toList();
 
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
       padding: const EdgeInsets.all(20.0),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.45),
-        borderRadius: BorderRadius.circular(24.0),
-        border: Border.all(
-          color: theme.colorScheme.outline.withOpacity(0.12),
-          width: 1.0,
-        ),
+        color: theme.colorScheme.surfaceVariant.withOpacity(isDark ? 0.35 : 0.5),
+        borderRadius: BorderRadius.circular(28.0),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

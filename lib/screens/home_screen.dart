@@ -107,32 +107,24 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildExpressiveNavigationBar(ThemeData theme, bool isDark, Color activeColor, bool isBreak) {
-    // Dynamic solid background matching theme and phase
+    // Dynamic solid background matching theme and phase (slightly lighter/darker flat shade)
     final Color navBg = isDark
-        ? Color.alphaBlend(activeColor.withOpacity(0.12), theme.colorScheme.surface)
+        ? Color.alphaBlend(activeColor.withOpacity(0.08), theme.colorScheme.surfaceVariant)
         : Colors.white;
-
-    final Color navBorder = isDark
-        ? activeColor.withOpacity(0.18)
-        : activeColor.withOpacity(0.12);
 
     return Padding(
       padding: const EdgeInsets.only(left: 24.0, right: 24.0, bottom: 20.0),
       child: Container(
-        height: 72.0,
+        height: 76.0,
         decoration: BoxDecoration(
           color: navBg,
-          borderRadius: BorderRadius.circular(24.0),
-          border: Border.all(
-            color: navBorder,
-            width: 1.5,
-          ),
+          borderRadius: BorderRadius.circular(38.0), // Fully rounded pill shape
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.25 : 0.05),
-              blurRadius: 15,
-              spreadRadius: -2,
-              offset: const Offset(0, 4),
+              color: Colors.black.withOpacity(isDark ? 0.2 : 0.04),
+              blurRadius: 20,
+              spreadRadius: -4,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
@@ -150,7 +142,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildNavItem(int index, IconData outlineIcon, IconData filledIcon, String label, ThemeData theme, bool isDark, Color activeColor) {
     final isSelected = _currentIndex == index;
-    final Color itemColor = isSelected ? activeColor : theme.colorScheme.onSurface.withOpacity(0.45);
+    final Color itemColor = isSelected ? activeColor : theme.colorScheme.onSurface.withOpacity(0.5);
 
     return Expanded(
       child: GestureDetector(
@@ -162,10 +154,12 @@ class _HomeScreenState extends State<HomeScreen> {
             AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 6.0),
               decoration: BoxDecoration(
-                color: isSelected ? activeColor.withOpacity(0.08) : Colors.transparent,
-                borderRadius: BorderRadius.circular(16.0),
+                color: isSelected 
+                    ? activeColor.withOpacity(isDark ? 0.16 : 0.10) 
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(20.0), // Rounded active indicator pill
               ),
               child: Icon(
                 isSelected ? filledIcon : outlineIcon,
@@ -173,14 +167,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 size: 24.0,
               ),
             ),
-            const SizedBox(height: 3.0),
+            const SizedBox(height: 4.0),
             Text(
               label,
               style: TextStyle(
-                color: itemColor,
-                fontSize: 10.0,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                letterSpacing: 0.5,
+                color: isSelected ? activeColor : theme.colorScheme.onSurface.withOpacity(0.6),
+                fontSize: 11.0,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                letterSpacing: 0.3,
               ),
             ),
           ],

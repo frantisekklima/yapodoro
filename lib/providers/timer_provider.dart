@@ -43,11 +43,14 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   // Settings (Dynamic)
   double _dynamicDivisor = 4.0;
-  int _carryOverBreakSeconds = 0;
+  int _classicCarryOverBreakSeconds = 0; // Break overflow time for Classic Mode
+  int _dynamicCarryOverBreakSeconds = 0; // Break overflow time for Dynamic Mode
   int _dynamicFocusCount = 0; // Sessional counter of completed Dynamic Focus segments (independent of Classic mode)
 
   double get dynamicDivisor => _dynamicDivisor;
-  int get carryOverBreakSeconds => _carryOverBreakSeconds;
+  int get classicCarryOverBreakSeconds => _classicCarryOverBreakSeconds;
+  int get dynamicCarryOverBreakSeconds => _dynamicCarryOverBreakSeconds;
+  int get carryOverBreakSeconds => _mode == AppTimerMode.classic ? _classicCarryOverBreakSeconds : _dynamicCarryOverBreakSeconds;
   int get dynamicFocusCount => _dynamicFocusCount;
 
   // Active Timer Counters
@@ -67,6 +70,9 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   // Stats
   List<WorkSession> _sessions = [];
   List<WorkSession> get sessions => _sessions;
+
+  List<WorkSession> _breakSessions = [];
+  List<WorkSession> get breakSessions => _breakSessions;
 
   // Audio Player
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -119,7 +125,8 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _classicLongBreakMinutes = prefs.getInt('classicLongBreakMinutes') ?? 15;
     _classicLongBreakInterval = prefs.getInt('classicLongBreakInterval') ?? 4;
     _dynamicDivisor = prefs.getDouble('dynamicDivisor') ?? 4.0;
-    _carryOverBreakSeconds = prefs.getInt('carryOverBreakSeconds') ?? 0;
+    _classicCarryOverBreakSeconds = prefs.getInt('classicCarryOverBreakSeconds') ?? prefs.getInt('carryOverBreakSeconds') ?? 0;
+    _dynamicCarryOverBreakSeconds = prefs.getInt('dynamicCarryOverBreakSeconds') ?? 0;
     _enableBreakRollover = prefs.getBool('enableBreakRollover') ?? true;
     _classicFocusCount = prefs.getInt('classicFocusCount') ?? 0;
     _dynamicFocusCount = prefs.getInt('dynamicFocusCount') ?? 0;
@@ -138,6 +145,17 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _sessions = decodedList.map((item) => WorkSession.fromJson(item as Map<String, dynamic>)).toList();
       } catch (e) {
         debugPrint("Error decoding sessions: $e");
+      }
+    }
+
+    // Load Break Sessions
+    final breakSessionsJson = prefs.getString('break_sessions');
+    if (breakSessionsJson != null) {
+      try {
+        final List<dynamic> decodedList = jsonDecode(breakSessionsJson) as List<dynamic>;
+        _breakSessions = decodedList.map((item) => WorkSession.fromJson(item as Map<String, dynamic>)).toList();
+      } catch (e) {
+        debugPrint("Error decoding break sessions: $e");
       }
     }
 
@@ -246,9 +264,14 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     prefs.setString('appTimerMode', _mode == AppTimerMode.classic ? 'classic' : 'dynamic');
   }
 
-  Future<void> _saveCarryOver() async {
+  Future<void> _saveClassicCarryOver() async {
     final prefs = await SharedPreferences.getInstance();
-    prefs.setInt('carryOverBreakSeconds', _carryOverBreakSeconds);
+    await prefs.setInt('classicCarryOverBreakSeconds', _classicCarryOverBreakSeconds);
+  }
+
+  Future<void> _saveDynamicCarryOver() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('dynamicCarryOverBreakSeconds', _dynamicCarryOverBreakSeconds);
   }
 
   // Actions
@@ -317,19 +340,46 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   void stopTimer() {
     if (_state == AppTimerState.idle) return;
 
-    // If stopping in dynamic work, save work completed so far
-    if (_state == AppTimerState.working && _mode == AppTimerMode.dynamicMode) {
-      _logSession(_elapsedSeconds);
-    } else if (_state == AppTimerState.paused && _pausedState == AppTimerState.working && _mode == AppTimerMode.dynamicMode) {
-      _logSession(_secondsBeforePause);
+    // Log the work completed so far if stopping during work
+    if (_state == AppTimerState.working) {
+      int workedSeconds = _mode == AppTimerMode.dynamicMode
+          ? _elapsedSeconds
+          : (_totalDurationForCurrentSegment - _remainingSeconds);
+      if (workedSeconds > 0) {
+        _logSession(workedSeconds);
+      }
+    } else if (_state == AppTimerState.paused && _pausedState == AppTimerState.working) {
+      int workedSeconds = _mode == AppTimerMode.dynamicMode
+          ? _secondsBeforePause
+          : (_totalDurationForCurrentSegment - _secondsBeforePause);
+      if (workedSeconds > 0) {
+        _logSession(workedSeconds);
+      }
+    }
+
+    // Log the break completed so far if stopping during a break
+    if (_state == AppTimerState.breakTime) {
+      int breakSeconds = _totalDurationForCurrentSegment - _remainingSeconds;
+      if (breakSeconds > 0) {
+        _logBreakSession(breakSeconds);
+      }
+    } else if (_state == AppTimerState.paused && _pausedState == AppTimerState.breakTime) {
+      int breakSeconds = _totalDurationForCurrentSegment - _secondsBeforePause;
+      if (breakSeconds > 0) {
+        _logBreakSession(breakSeconds);
+      }
     }
     
     if (_mode == AppTimerMode.classic) {
       _classicFocusCount = 0;
       _saveClassicFocusCount();
+      _classicCarryOverBreakSeconds = 0;
+      _saveClassicCarryOver();
     } else {
       _dynamicFocusCount = 0;
       _saveDynamicFocusCount();
+      _dynamicCarryOverBreakSeconds = 0;
+      _saveDynamicCarryOver();
     }
 
     _resetTimerEngine();
@@ -350,11 +400,11 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // Calculate break duration
     int baseBreak = (workDuration / _dynamicDivisor).round();
-    int totalBreak = baseBreak + _carryOverBreakSeconds;
+    int totalBreak = baseBreak + _dynamicCarryOverBreakSeconds;
 
     // Reset carry over since we are consuming it
-    _carryOverBreakSeconds = 0;
-    _saveCarryOver();
+    _dynamicCarryOverBreakSeconds = 0;
+    _saveDynamicCarryOver();
 
     // Transition to break
     _dynamicFocusCount++;
@@ -398,9 +448,9 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     bool isLongBreak = totalWorkSessions > 0 && (totalWorkSessions % _classicLongBreakInterval == 0);
     int baseBreakMinutes = isLongBreak ? _classicLongBreakMinutes : _classicShortBreakMinutes;
 
-    int totalBreakSeconds = (baseBreakMinutes * 60) + _carryOverBreakSeconds;
-    _carryOverBreakSeconds = 0;
-    _saveCarryOver();
+    int totalBreakSeconds = (baseBreakMinutes * 60) + _classicCarryOverBreakSeconds;
+    _classicCarryOverBreakSeconds = 0;
+    _saveClassicCarryOver();
 
     _state = AppTimerState.breakTime;
     _totalDurationForCurrentSegment = totalBreakSeconds;
@@ -420,13 +470,29 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     int breakRemaining = _state == AppTimerState.breakTime ? _remainingSeconds : _secondsBeforePause;
     
+    // Log the actual break seconds spent
+    int spentBreakSeconds = _totalDurationForCurrentSegment - breakRemaining;
+    if (spentBreakSeconds > 0) {
+      _logBreakSession(spentBreakSeconds);
+    }
+
     // Save carry over if break rollover is enabled
     if (_enableBreakRollover) {
-      _carryOverBreakSeconds += breakRemaining;
-      _saveCarryOver();
+      if (_mode == AppTimerMode.classic) {
+        _classicCarryOverBreakSeconds += breakRemaining;
+        _saveClassicCarryOver();
+      } else {
+        _dynamicCarryOverBreakSeconds += breakRemaining;
+        _saveDynamicCarryOver();
+      }
     } else {
-      _carryOverBreakSeconds = 0;
-      _saveCarryOver();
+      if (_mode == AppTimerMode.classic) {
+        _classicCarryOverBreakSeconds = 0;
+        _saveClassicCarryOver();
+      } else {
+        _dynamicCarryOverBreakSeconds = 0;
+        _saveDynamicCarryOver();
+      }
     }
 
     // Stop current break and transition back to working state
@@ -528,9 +594,9 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     bool isLongBreak = totalWorkSessions > 0 && (totalWorkSessions % _classicLongBreakInterval == 0);
     int baseBreakMinutes = isLongBreak ? _classicLongBreakMinutes : _classicShortBreakMinutes;
 
-    int totalBreakSeconds = (baseBreakMinutes * 60) + _carryOverBreakSeconds;
-    _carryOverBreakSeconds = 0;
-    _saveCarryOver();
+    int totalBreakSeconds = (baseBreakMinutes * 60) + _classicCarryOverBreakSeconds;
+    _classicCarryOverBreakSeconds = 0;
+    _saveClassicCarryOver();
 
     // Transition to break
     _state = AppTimerState.breakTime;
@@ -554,6 +620,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   // Complete break segment
   void _handleBreakCompleted() {
+    _logBreakSession(_totalDurationForCurrentSegment);
     _resetTimerEngine();
     _playAlertSound();
     // Show static Break Completed notification only if in background
@@ -582,18 +649,60 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  // Save Break Session data
+  Future<void> _logBreakSession(int durationInSeconds) async {
+    if (durationInSeconds <= 0) return;
+
+    final newSession = WorkSession(
+      date: DateTime.now(),
+      durationSeconds: durationInSeconds,
+    );
+    _breakSessions.add(newSession);
+
+    final prefs = await SharedPreferences.getInstance();
+    final jsonList = _breakSessions.map((s) => s.toJson()).toList();
+    prefs.setString('break_sessions', jsonEncode(jsonList));
+    notifyListeners();
+  }
+
   // Clean all session data
   Future<void> clearAllData() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('work_sessions');
+    await prefs.remove('break_sessions');
     await prefs.remove('carryOverBreakSeconds');
+    await prefs.remove('classicCarryOverBreakSeconds');
+    await prefs.remove('dynamicCarryOverBreakSeconds');
     await prefs.remove('classicFocusCount');
     await prefs.remove('dynamicFocusCount');
     _classicFocusCount = 0;
     _dynamicFocusCount = 0;
     _sessions.clear();
-    _carryOverBreakSeconds = 0;
+    _breakSessions.clear();
+    _classicCarryOverBreakSeconds = 0;
+    _dynamicCarryOverBreakSeconds = 0;
     _resetTimerEngine();
+    HapticFeedback.heavyImpact();
+    notifyListeners();
+  }
+
+  // Reset all user settings configurations to defaults
+  Future<void> resetSettingsToDefault() async {
+    final prefs = await SharedPreferences.getInstance();
+    _classicWorkMinutes = 25;
+    _classicShortBreakMinutes = 5;
+    _classicLongBreakMinutes = 15;
+    _classicLongBreakInterval = 4;
+    _dynamicDivisor = 4.0;
+    _enableBreakRollover = true;
+
+    await prefs.setInt('classicWorkMinutes', 25);
+    await prefs.setInt('classicShortBreakMinutes', 5);
+    await prefs.setInt('classicLongBreakMinutes', 15);
+    await prefs.setInt('classicLongBreakInterval', 4);
+    await prefs.setDouble('dynamicDivisor', 4.0);
+    await prefs.setBool('enableBreakRollover', true);
+
     HapticFeedback.heavyImpact();
     notifyListeners();
   }
@@ -818,6 +927,14 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
         .fold(0, (sum, s) => sum + s.durationSeconds);
   }
 
+  // Seconds spent on break today
+  int get todayBreakSeconds {
+    final today = DateTime.now();
+    return _breakSessions
+        .where((s) => s.date.year == today.year && s.date.month == today.month && s.date.day == today.day)
+        .fold(0, (sum, s) => sum + s.durationSeconds);
+  }
+
   // Seconds worked in the current week (ISO week starting on Monday)
   int get weekWorkSeconds {
     final now = DateTime.now();
@@ -876,8 +993,10 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('enableBreakRollover', value);
     if (!value) {
-      _carryOverBreakSeconds = 0;
-      _saveCarryOver();
+      _classicCarryOverBreakSeconds = 0;
+      _dynamicCarryOverBreakSeconds = 0;
+      _saveClassicCarryOver();
+      _saveDynamicCarryOver();
     }
     notifyListeners();
   }

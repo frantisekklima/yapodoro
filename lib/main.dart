@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dynamic_color/dynamic_color.dart';
-import 'package:tofu_expressive/tofu_expressive.dart';
 import 'package:m3e_design/m3e_design.dart';
 import 'screens/home_screen.dart';
 import 'services/notification_service.dart';
@@ -39,22 +38,22 @@ class MyApp extends StatelessWidget {
       builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
         // CURATED SEED COLORS aligned with Material 3 Expressive guidelines
         const Color focusSeedColor = Color(0xFF1E5631); // Mint Green
-        const Color darkFocusSeedColor = Color(0xFF8FBC8F); // Soft Green
 
-        // Create standard Tofu Expressive themes and inject M3ETheme design extension
-        final lightTheme = withM3ETheme(
-          TofuTheme.light(
-            seedColor: lightDynamic?.primary ?? focusSeedColor,
-            fontFamily: 'Roboto',
-          ),
-        );
-
-        final darkTheme = withM3ETheme(
-          TofuTheme.dark(
-            seedColor: darkDynamic?.primary ?? darkFocusSeedColor,
-            fontFamily: 'Roboto',
-          ),
-        );
+        // Determine correct light theme: use the full lightDynamic scheme directly if available
+        final ThemeData lightTheme = lightDynamic != null
+            ? lightDynamic.harmonized().toM3EThemeData()
+            : ColorScheme.fromSeed(
+                seedColor: focusSeedColor,
+                brightness: Brightness.light,
+              ).toM3EThemeData();
+ 
+        // Determine correct dark theme: use the full darkDynamic scheme directly if available
+        final ThemeData darkTheme = darkDynamic != null
+            ? darkDynamic.harmonized().toM3EThemeData()
+            : ColorScheme.fromSeed(
+                seedColor: focusSeedColor,
+                brightness: Brightness.dark,
+              ).toM3EThemeData();
 
         return MaterialApp(
           title: 'Yet Another Pomodoro 2.0',

@@ -45,30 +45,7 @@ class _TimerPageState extends State<TimerPage> {
 
   // Material 3 Expressive helper to guarantee high contrast between focus and break colors
   Color _getBreakColor(ThemeData theme) {
-    final primary = theme.colorScheme.primary;
-    final tertiary = theme.colorScheme.tertiary;
-    
-    final hslPrimary = HSLColor.fromColor(primary);
-    final hslTertiary = HSLColor.fromColor(tertiary);
-    
-    double hueDiff = (hslPrimary.hue - hslTertiary.hue).abs();
-    if (hueDiff > 180) {
-      hueDiff = 360 - hueDiff;
-    }
-    
-    // If hues are too close (less than 35 degrees difference), shift tertiary hue by 90 degrees
-    // to mathematically guarantee a highly distinct contrasting color!
-    if (hueDiff < 35.0) {
-      double newHue = (hslPrimary.hue + 90.0) % 360.0;
-      return HSLColor.fromAHSL(
-        tertiary.opacity,
-        newHue,
-        hslTertiary.saturation.clamp(0.65, 0.9), // Keep color vibrant
-        hslTertiary.lightness.clamp(0.45, 0.6),  // Ensure legibility
-      ).toColor();
-    }
-    
-    return tertiary;
+    return theme.colorScheme.tertiary;
   }
 
   @override
@@ -276,20 +253,10 @@ class _TimerPageState extends State<TimerPage> {
     );
   }
 
-  // Pill Mode Switcher Widget (No glassmorphism, solid M3 surfaces)
+  // Pill Mode Switcher Widget (No glassmorphism, solid M3 surfaces, no border)
   Widget _buildModeSwitcher(TimerProvider provider, bool isIdle, ThemeData theme, Color primaryColor) {
-    return Container(
-      padding: const EdgeInsets.all(4.0),
-      decoration: BoxDecoration(
-        color: theme.brightness == Brightness.dark
-            ? theme.colorScheme.surfaceVariant
-            : primaryColor.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(30.0),
-        border: Border.all(
-          color: primaryColor.withOpacity(0.16),
-          width: 1.5,
-        ),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -299,15 +266,18 @@ class _TimerPageState extends State<TimerPage> {
             "Classic",
             isIdle,
             provider.mode == AppTimerMode.classic,
+            true, // isLeft = true
             theme,
             primaryColor,
           ),
+          const SizedBox(width: 2),
           _buildModeButton(
             provider,
             AppTimerMode.dynamicMode,
             "Dynamic",
             isIdle,
             provider.mode == AppTimerMode.dynamicMode,
+            false, // isLeft = false
             theme,
             primaryColor,
           ),
@@ -322,9 +292,46 @@ class _TimerPageState extends State<TimerPage> {
     String text,
     bool isIdle,
     bool isSelected,
+    bool isLeft,
     ThemeData theme,
     Color primaryColor,
   ) {
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Morphing BorderRadius:
+    // Selected button: fully rounded pill (28.0)
+    // Unselected left button: fully rounded outer (left) edge, partially rounded inner (right) edge
+    // Unselected right button: partially rounded inner (left) edge, fully rounded outer (right) edge
+    final BorderRadius borderRadius = isSelected
+        ? BorderRadius.circular(28.0)
+        : (isLeft
+            ? const BorderRadius.only(
+                topLeft: Radius.circular(28.0),
+                bottomLeft: Radius.circular(28.0),
+                topRight: Radius.circular(12.0),
+                bottomRight: Radius.circular(12.0),
+              )
+            : const BorderRadius.only(
+                topLeft: Radius.circular(12.0),
+                bottomLeft: Radius.circular(12.0),
+                topRight: Radius.circular(28.0),
+                bottomRight: Radius.circular(28.0),
+              ));
+
+    // Dynamic backgrounds
+    final Color bgColor = isSelected
+        ? primaryColor
+        : (isDark
+            ? theme.colorScheme.surfaceVariant.withOpacity(0.35)
+            : primaryColor.withOpacity(0.08));
+
+    // Dynamic text and icon colors
+    final Color contentColor = isSelected
+        ? Colors.white
+        : (isIdle
+            ? primaryColor.withOpacity(0.85)
+            : primaryColor.withOpacity(0.35));
+
     return GestureDetector(
       onTap: isIdle ? () => provider.setMode(targetMode) : null,
       child: AnimatedContainer(
@@ -332,18 +339,33 @@ class _TimerPageState extends State<TimerPage> {
         curve: Curves.easeOutCubic,
         padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10.0),
         decoration: BoxDecoration(
-          color: isSelected ? primaryColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(24.0),
+          color: bgColor,
+          borderRadius: borderRadius,
         ),
-        child: Text(
-          text,
-          style: TextStyle(
-            color: isSelected
-                ? Colors.white
-                : theme.colorScheme.onBackground.withOpacity(isIdle ? 0.45 : 0.2),
-            fontSize: 13.0,
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-            letterSpacing: 0.5,
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isSelected) ...[
+                Icon(
+                  Icons.check_rounded,
+                  color: contentColor,
+                  size: 16.0,
+                ),
+                const SizedBox(width: 8.0),
+              ],
+              Text(
+                text,
+                style: TextStyle(
+                  color: contentColor,
+                  fontSize: 13.0,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -386,7 +408,7 @@ class _TimerPageState extends State<TimerPage> {
               shape: const CircleBorder(),
             ),
           ),
-          const SizedBox(width: 20),
+          const SizedBox(width: 8),
 
           // 2. CENTER Button: Primary Action (Symmetric rounded rectangle, active accent background, no glow)
           if (isWork)
@@ -438,7 +460,7 @@ class _TimerPageState extends State<TimerPage> {
                 elevation: 0.0,
               ),
             ),
-          const SizedBox(width: 20),
+          const SizedBox(width: 8),
 
           // 3. RIGHT Button: Pause/Resume Toggle (Symmetric rounded circle, inactive background, no glow)
           IconButton(
