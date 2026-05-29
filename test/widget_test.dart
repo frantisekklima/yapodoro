@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yapodoro/main.dart';
+import 'package:yapmodoro/main.dart';
 
 void main() {
   testWidgets('App smoke test - verifies title displays', (WidgetTester tester) async {

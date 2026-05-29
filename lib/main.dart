@@ -56,7 +56,7 @@ class MyApp extends StatelessWidget {
               ).toM3EThemeData();
 
         return MaterialApp(
-          title: 'Yapodoro',
+          title: 'Yapmodoro',
           debugShowCheckedModeBanner: false,
           themeMode: ThemeMode.system, // Adapt to system light/dark
           theme: lightTheme,

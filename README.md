@@ -1,12 +1,12 @@
-﻿# Yapodoro — **Y**et **A**nother **Po**mo**doro**
+# Yapmodoro — **Y**et **A**nother **Po**mo**doro**
 
-Yapodoro is a modern Pomodoro application featuring two modes:
+Yapmodoro is a modern Pomodoro application featuring two modes:
   1. **Classic Mode**: Standard intervals (Focus, Short Break, and a Long Break after every 4th Focus segment) with customized durations.
   2. **Dynamic Mode**: A count-up focus timer that measures your *flow state*, automatically calculating break durations using a customizable division factor (e.g., Focus Time / 4).
 
 ## Installing the App
 
-**Download the latest installable apk from [Releases](https://github.com/frantisekklima/yapodoro/releases)**
+**Download the latest installable apk from [Releases](https://github.com/frantisekklima/yapmodoro/releases)**
 
 ## Questions No One Asked
 
