@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.fk" "\0"
-            VALUE "FileDescription", "yet_another_pomodoro" "\0"
+            VALUE "CompanyName", "com.yapodoro" "\0"
+            VALUE "FileDescription", "yapodoro" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "yet_another_pomodoro" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.fk. All rights reserved." "\0"
-            VALUE "OriginalFilename", "yet_another_pomodoro.exe" "\0"
-            VALUE "ProductName", "yet_another_pomodoro" "\0"
+            VALUE "InternalName", "yapodoro" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.yapodoro. All rights reserved." "\0"
+            VALUE "OriginalFilename", "yapodoro.exe" "\0"
+            VALUE "ProductName", "Yapodoro" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

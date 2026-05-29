@@ -859,7 +859,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
           builder: (context) => AlertDialog(
             title: const Text("Alarms & Reminders Permission"),
             content: const Text(
-              "Yet Another Pomodoro needs the Alarms & Reminders permission to play completion sounds precisely on time in the background.\n\n"
+              "Yapodoro needs the Alarms & Reminders permission to play completion sounds precisely on time in the background.\n\n"
               "Please allow this permission on the next settings screen."
             ),
             actions: [
@@ -890,7 +890,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
           builder: (context) => AlertDialog(
             title: const Text("Battery Optimization Exemption"),
             content: const Text(
-              "To prevent aggressive background task killers from stopping your timer, please exempt Yet Another Pomodoro from battery optimization on the next settings screen."
+              "To prevent aggressive background task killers from stopping your timer, please exempt Yapodoro from battery optimization on the next settings screen."
             ),
             actions: [
               TextButton(

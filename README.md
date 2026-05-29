@@ -1,12 +1,12 @@
-﻿# YAP — Yet Another Pomodoro
+﻿# Yapodoro — **Y**et **A**nother **Po**mo**doro**
 
-YAP is a modern Pomodoro application featuring two modes:
+Yapodoro is a modern Pomodoro application featuring two modes:
   1. **Classic Mode**: Standard intervals (Focus, Short Break, and a Long Break after every 4th Focus segment) with customized durations.
   2. **Dynamic Mode**: A count-up focus timer that measures your *flow state*, automatically calculating break durations using a customizable division factor (e.g., Focus Time / 4).
 
 ## Installing the App
 
-**Download the latest installable apk from [Releases](https://github.com/frantisekklima/yet-another-pomodoro/releases)**
+**Download the latest installable apk from [Releases](https://github.com/frantisekklima/yapodoro/releases)**
 
 ## Questions No One Asked
 

@@ -5,10 +5,10 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = YAP
+PRODUCT_NAME = Yapodoro
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.fk.yetAnotherPomodoro
+PRODUCT_BUNDLE_IDENTIFIER = com.yapodoro.app
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.fk. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 com.yapodoro. All rights reserved.
