@@ -74,6 +74,13 @@ class _TimerPageState extends State<TimerPage> {
 
         final themeColors = [modePrimaryColor, modePrimaryColor.withOpacity(0.85)];
 
+        final bool showAdjustButtons = currentTimerMode == AppTimerMode.classic ||
+            (currentTimerMode == AppTimerMode.dynamicMode && isBreak);
+
+        final Color adjustButtonBg = theme.brightness == Brightness.dark
+            ? theme.colorScheme.surfaceVariant
+            : modePrimaryColor.withOpacity(0.08);
+
         // Calculate today's completed focus sessions count
         final today = DateTime.now();
         final int todayFocusCount = provider.sessions
@@ -101,7 +108,7 @@ class _TimerPageState extends State<TimerPage> {
         String timerString = "00:00";
         if (isIdle) {
           timerString = currentTimerMode == AppTimerMode.classic
-              ? '${provider.classicWorkMinutes.toString().padLeft(2, '0')}:00'
+              ? '${(provider.classicWorkMinutes + (provider.classicWorkAdjustmentSeconds ~/ 60)).toString().padLeft(2, '0')}:00'
               : '00:00';
         } else if (isWork) {
           timerString = currentTimerMode == AppTimerMode.dynamicMode
@@ -197,14 +204,50 @@ class _TimerPageState extends State<TimerPage> {
                       gradientColors: themeColors,
                       isWavy: isWavy,
                       strokeWidth: 12.0,
-                      child: Text(
-                        timerString,
-                        style: TextStyle(
-                          color: theme.colorScheme.onBackground,
-                          fontSize: 54.0,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -1.5,
-                        ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (showAdjustButtons) ...[
+                            IconButton(
+                              onPressed: () => provider.addMinute(),
+                              icon: const Icon(Icons.add_rounded, size: 20.0),
+                              style: IconButton.styleFrom(
+                                backgroundColor: adjustButtonBg,
+                                foregroundColor: modePrimaryColor,
+                                minimumSize: const Size(40, 40),
+                                maximumSize: const Size(40, 40),
+                                padding: EdgeInsets.zero,
+                                shape: const CircleBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                          ],
+                          Text(
+                            timerString,
+                            style: TextStyle(
+                              color: theme.colorScheme.onBackground,
+                              fontSize: 54.0,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -1.5,
+                            ),
+                          ),
+                          if (showAdjustButtons) ...[
+                            const SizedBox(height: 6),
+                            IconButton(
+                              onPressed: () => provider.subtractMinute(),
+                              icon: const Icon(Icons.remove_rounded, size: 20.0),
+                              style: IconButton.styleFrom(
+                                backgroundColor: adjustButtonBg,
+                                foregroundColor: modePrimaryColor,
+                                minimumSize: const Size(40, 40),
+                                maximumSize: const Size(40, 40),
+                                padding: EdgeInsets.zero,
+                                shape: const CircleBorder(),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ),

@@ -57,10 +57,12 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   int _elapsedSeconds = 0; // Counts up in dynamic work
   int _remainingSeconds = 0; // Counts down in classic work, and both breaks
   int _totalDurationForCurrentSegment = 0; // To compute percentage/progress
+  int _classicWorkAdjustmentSeconds = 0; // Prep-time sessional adjustment (plus/minus controls)
 
   int get elapsedSeconds => _elapsedSeconds;
   int get remainingSeconds => _remainingSeconds;
   int get totalDurationForCurrentSegment => _totalDurationForCurrentSegment;
+  int get classicWorkAdjustmentSeconds => _classicWorkAdjustmentSeconds;
 
   // Dynamic getter returning active mode sessional count
   int get currentFlowSessionIndex {
@@ -282,9 +284,10 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     HapticFeedback.mediumImpact();
     
     if (_mode == AppTimerMode.classic) {
-      _totalDurationForCurrentSegment = _classicWorkMinutes * 60;
+      _totalDurationForCurrentSegment = _classicWorkMinutes * 60 + _classicWorkAdjustmentSeconds;
       _remainingSeconds = _totalDurationForCurrentSegment;
       _segmentTargetTime = DateTime.now().add(Duration(seconds: _remainingSeconds));
+      _classicWorkAdjustmentSeconds = 0; // Reset after applying to running session
     } else {
       _elapsedSeconds = 0;
       _workStartTime = DateTime.now();
@@ -537,6 +540,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _totalDurationForCurrentSegment = 0;
     _segmentTargetTime = null;
     _workStartTime = null;
+    _classicWorkAdjustmentSeconds = 0; // Reset sessional adjustments
     _updateSystemNotifications();
     _clearSavedTimerState();
   }
@@ -585,7 +589,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   // Complete work segment in Classic Mode
   void _handleClassicWorkCompleted() {
     _stopTicker();
-    _logSession(_classicWorkMinutes * 60);
+    _logSession(_totalDurationForCurrentSegment);
 
     // Calculate which break it is (based entirely on Classic Focus count)
     _classicFocusCount++;
@@ -704,6 +708,78 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     await prefs.setBool('enableBreakRollover', true);
 
     HapticFeedback.heavyImpact();
+    notifyListeners();
+  }
+
+  // Add 1 minute to the timer
+  void addMinute() {
+    // Dynamic Focus mode working state has no strict duration, so no buttons should be allowed
+    if (_mode == AppTimerMode.dynamicMode &&
+        (_state == AppTimerState.working ||
+            (_state == AppTimerState.paused && _pausedState == AppTimerState.working))) {
+      return;
+    }
+    if (_state == AppTimerState.idle && _mode == AppTimerMode.dynamicMode) {
+      return;
+    }
+
+    HapticFeedback.lightImpact();
+    if (_state == AppTimerState.idle) {
+      if (_mode == AppTimerMode.classic) {
+        _classicWorkAdjustmentSeconds += 60;
+      }
+    } else {
+      _totalDurationForCurrentSegment += 60;
+      _remainingSeconds += 60;
+      if (_state == AppTimerState.paused) {
+        _secondsBeforePause += 60;
+      } else if (_segmentTargetTime != null) {
+        _segmentTargetTime = _segmentTargetTime!.add(const Duration(seconds: 60));
+      }
+      _updateSystemNotifications();
+      _saveTimerState();
+    }
+    notifyListeners();
+  }
+
+  // Subtract 1 minute from the timer
+  void subtractMinute() {
+    // Dynamic Focus mode working state has no strict duration, so no buttons should be allowed
+    if (_mode == AppTimerMode.dynamicMode &&
+        (_state == AppTimerState.working ||
+            (_state == AppTimerState.paused && _pausedState == AppTimerState.working))) {
+      return;
+    }
+    if (_state == AppTimerState.idle && _mode == AppTimerMode.dynamicMode) {
+      return;
+    }
+
+    HapticFeedback.lightImpact();
+    if (_state == AppTimerState.idle) {
+      if (_mode == AppTimerMode.classic) {
+        // Clamp so upcoming work segment is at least 1 minute (60 seconds)
+        if (_classicWorkMinutes * 60 + _classicWorkAdjustmentSeconds - 60 >= 60) {
+          _classicWorkAdjustmentSeconds -= 60;
+        }
+      }
+    } else {
+      // Running or paused segment: clamp remaining time to >= 0
+      int actualReduction = 60;
+      if (_remainingSeconds - 60 < 0) {
+        actualReduction = _remainingSeconds;
+      }
+      if (actualReduction > 0) {
+        _totalDurationForCurrentSegment -= actualReduction;
+        _remainingSeconds -= actualReduction;
+        if (_state == AppTimerState.paused) {
+          _secondsBeforePause -= actualReduction;
+        } else if (_segmentTargetTime != null) {
+          _segmentTargetTime = _segmentTargetTime!.subtract(Duration(seconds: actualReduction));
+        }
+        _updateSystemNotifications();
+        _saveTimerState();
+      }
+    }
     notifyListeners();
   }
 
